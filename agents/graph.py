@@ -246,33 +246,3 @@ builder.add_conditional_edges("reviewer", route_after_review)
 builder.add_conditional_edges("debugger", route_after_debug)
 
 graph = builder.compile()
-
-
-# --- Run ---
-session_id = str(uuid.uuid4())
-print("=" * 50)
-print(f"SESSION: {session_id[:8]}")
-print("=" * 50)
-
-result = graph.invoke({
-    "session_id": session_id,
-    "task": "Write a Python function that finds the longest common subsequence of two strings",
-    "plan": "", "code": "", "review": {},
-    "execution_result": {}, "final_code": "",
-    "iterations": 0, "debug_attempts": 0, "timeline": []
-})
-
-print("\n" + "=" * 50)
-print("COMPLETE")
-print("=" * 50)
-print(f"Iterations:     {result['iterations']}")
-print(f"Debug attempts: {result['debug_attempts']}")
-print(f"Review score:   {result['review']['score']}/10")
-print(f"Execution:      {'✓ passed' if result['execution_result']['success'] else '✗ failed'}")
-
-print("\n--- Timeline ---")
-for i, e in enumerate(result["timeline"], 1):
-    print(f"  {i}. [{e['agent'].upper()}] {e['summary']}")
-
-print(f"\n--- Final code ---")
-print(result.get("final_code") or result["code"])
