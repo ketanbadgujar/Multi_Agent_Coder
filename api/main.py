@@ -115,6 +115,25 @@ async def list_sessions():
             })
     return {"sessions": sessions}
 
+# --- Route 5: Full session detail for replay ---
+@app.get("/session/{session_id}/timeline")
+async def get_timeline(session_id: str):
+    raw = r.get(f"session:{session_id}:state")
+    if not raw:
+        return {"error": "Session not found"}
+    data = json.loads(raw)
+    return {
+        "session_id": session_id,
+        "task": data.get("task", ""),
+        "timeline": data.get("timeline", []),
+        "score": data.get("review", {}).get("score"),
+        "last_agent": data.get("last_agent", ""),
+        "final_code": data.get("final_code", ""),
+        "plan": data.get("plan", ""),
+        "iterations": data.get("iterations", 0),
+        "execution_success": data.get("execution_result", {}).get("success", False),
+        "updated_at": data.get("updated_at")
+    }
 
 # --- Route 4: Health check ---
 @app.get("/")
