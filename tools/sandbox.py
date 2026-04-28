@@ -10,6 +10,12 @@ def run_code_in_sandbox(code: str, timeout: int = 10) -> dict:
     Run Python code inside a Docker container.
     Returns stdout, stderr, exit code, and success status.
     """
+    # Connect to Docker lazily
+    try:
+        client = docker.from_env()
+    except Exception as e:
+        return {"success": False, "stdout": "", "stderr": f"Docker not available: {str(e)}", "exit_code": 1}
+
     with tempfile.NamedTemporaryFile(
         mode='w',
         suffix='.py',
@@ -61,7 +67,6 @@ def run_code_in_sandbox(code: str, timeout: int = 10) -> dict:
         }
     finally:
         os.unlink(tmp_path)
-
 
 # --- Test it with 3 cases ---
 

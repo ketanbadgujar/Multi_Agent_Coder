@@ -13,8 +13,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # --- Clients ---
-r = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
-docker_client = docker.from_env()
+redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+r = redis.from_url(redis_url, decode_responses=True)
+
 llm = ChatAnthropic(model="claude-sonnet-4-6", max_tokens=2048)
 
 # --- State ---
@@ -32,6 +33,12 @@ class AgentState(TypedDict):
 
 # --- Sandbox ---
 def run_in_sandbox(code: str) -> dict:
+    # Connect to Docker lazily
+    try:
+        docker_client = docker.from_env()
+    except Exception as e:
+        return {"success": False, "stdout": "", "stderr": f"Docker not available: {str(e)}", "exit_code": 1}
+
     # Strip markdown fences if present
     clean = code.strip()
     if "```" in clean:
