@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 
 type AgentName = "planner" | "coder" | "reviewer" | "debugger";
 
@@ -46,13 +46,13 @@ const AGENTS: { name: AgentName; label: string; color: string; bg: string }[] =
     { name: "debugger", label: "Debugger", color: "#993C1D", bg: "#FAECE7" },
   ];
 
-const API = "http://localhost:8000";
+const API = process.env.REACT_APP_API_URL || "http://localhost:8000";
 
 const cleanPlan = (text: string): string => {
   return text
     .replace(/\*\*(.*?)\*\*/g, "$1")
     .replace(/`(.*?)`/g, "$1")
-    .replace(/^[\s•\-\*#]+/gm, "")
+    .replace(/^[\s•\-*#]+/gm, "")
     .split("\n")
     .filter((line: string) => {
       const trimmed = line.trim();
@@ -75,6 +75,7 @@ export default function App() {
   const [timeline, setTimeline] = useState<AgentUpdate[]>([]);
   const [activeAgent, setActive] = useState<AgentName | null>(null);
   const [result, setResult] = useState<FinalResult | null>(null);
+  const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [selected, setSelected] = useState<SessionDetail | null>(null);
@@ -83,6 +84,13 @@ export default function App() {
     return localStorage.getItem("darkMode") === "true";
   });
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const feedRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (feedRef.current) {
+      feedRef.current.scrollTop = feedRef.current.scrollHeight;
+    }
+  }, [timeline, status]);
 
   const t = {
     bg: darkMode ? "#1a1a1a" : "#fafaf9",
@@ -413,7 +421,7 @@ export default function App() {
               </button>
             </div>
             {error && <div style={s.errorBox}>{error}</div>}
-            <div style={s.feed}>
+            <div style={s.feed} ref={feedRef}>
               {timeline.length === 0 && status === "idle" && (
                 <div style={{ ...s.empty, color: t.textTertiary }}>
                   Enter a coding task above and press Run.
@@ -524,6 +532,52 @@ export default function App() {
                       >
                         {result.execution_success ? "Executed" : "Failed"}
                       </span>
+
+                      {/* Copy button */}
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(result.final_code);
+                          setCopied(true);
+                          setTimeout(() => setCopied(false), 2000);
+                        }}
+                        style={{
+                          fontSize: 11,
+                          padding: "2px 8px",
+                          borderRadius: 6,
+                          border: "0.5px solid #444",
+                          background: copied ? "#1a4a2e" : "#2a2a2a",
+                          color: copied ? "#4ade80" : "#aaa",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {copied ? "✓ Copied" : "⎘ Copy"}
+                      </button>
+
+                      {/* Download button */}
+                      <button
+                        onClick={() => {
+                          const blob = new Blob([result.final_code], {
+                            type: "text/plain",
+                          });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement("a");
+                          a.href = url;
+                          a.download = "solution.py";
+                          a.click();
+                          URL.revokeObjectURL(url);
+                        }}
+                        style={{
+                          fontSize: 11,
+                          padding: "2px 8px",
+                          borderRadius: 6,
+                          border: "0.5px solid #444",
+                          background: "#2a2a2a",
+                          color: "#aaa",
+                          cursor: "pointer",
+                        }}
+                      >
+                        ↓ Download
+                      </button>
                     </div>
                   </div>
                   <pre
@@ -536,7 +590,10 @@ export default function App() {
                       overflowY: "auto" as const,
                     }}
                   >
-                    {result.final_code}
+                    {result.final_code || result.final_code === ""
+                      ? result.final_code ||
+                        "-- code not captured, check dashboard for this session --"
+                      : ""}
                   </pre>
                 </div>
               )}

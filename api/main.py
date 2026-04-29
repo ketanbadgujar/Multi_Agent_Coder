@@ -8,6 +8,8 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import sys
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 import os
 
 # Make sure agents/ and tools/ are importable
@@ -83,7 +85,7 @@ async def run_agents(request: TaskRequest):
             "score": result["review"]["score"],
             "verdict": result["review"]["verdict"],
             "execution_success": result["execution_result"]["success"],
-            "final_code": result.get("final_code") or result["code"],
+            "final_code": result.get("final_code") or result.get("code") or "",
             "plan": result["plan"]
         }) + "\n"
 
@@ -138,9 +140,31 @@ async def get_timeline(session_id: str):
     }
 
 # --- Route 4: Health check ---
-@app.get("/")
-async def root():
+@app.get("/health")
+async def health():
     return {
         "status": "running",
         "routes": ["/run", "/session/{id}", "/sessions"]
     }
+
+# --- Serve React frontend ---
+frontend_build = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "frontend", "build"
+)
+
+if os.path.exists(frontend_build):
+    app.mount("/static", StaticFiles(
+        directory=os.path.join(frontend_build, "static")), name="static")
+
+    @app.get("/")
+    async def serve_index():
+        return FileResponse(os.path.join(frontend_build, "index.html"))
+
+    @app.get("/{full_path:path}")
+    async def serve_frontend(full_path: str):
+        return FileResponse(os.path.join(frontend_build, "index.html"))
+else:
+    @app.get("/")
+    async def root():
+        return {"status": "running", "routes": ["/run", "/session/{id}", "/sessions"]}
