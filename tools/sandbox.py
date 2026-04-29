@@ -2,9 +2,6 @@ import docker
 import tempfile
 import os
 
-# --- Connect to Docker ---
-client = docker.from_env()
-
 def run_code_in_sandbox(code: str, timeout: int = 10) -> dict:
     """
     Run Python code inside a Docker container.

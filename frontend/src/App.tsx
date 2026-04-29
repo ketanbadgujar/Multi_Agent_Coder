@@ -48,6 +48,26 @@ const AGENTS: { name: AgentName; label: string; color: string; bg: string }[] =
 
 const API = "http://localhost:8000";
 
+const cleanPlan = (text: string): string => {
+  return text
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/`(.*?)`/g, "$1")
+    .replace(/^[\s•\-\*#]+/gm, "")
+    .split("\n")
+    .filter((line: string) => {
+      const trimmed = line.trim();
+      if (trimmed === "") return false;
+      if (
+        /^(plan|here is|here's|the following|steps?|overview)\b/i.test(trimmed)
+      )
+        return false;
+      if (trimmed.length < 8) return false;
+      return true;
+    })
+    .map((line: string, i: number) => `${i + 1}. ${line.trim()}`)
+    .join("\n");
+};
+
 export default function App() {
   const [tab, setTab] = useState<Tab>("run");
   const [task, setTask] = useState("");
@@ -59,7 +79,32 @@ export default function App() {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [selected, setSelected] = useState<SessionDetail | null>(null);
   const [loadingDash, setLoadingDash] = useState(false);
+  const [darkMode, setDarkMode] = useState<boolean>(() => {
+    return localStorage.getItem("darkMode") === "true";
+  });
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const t = {
+    bg: darkMode ? "#1a1a1a" : "#fafaf9",
+    surface: darkMode ? "#242424" : "#ffffff",
+    sidebar: darkMode ? "#1e1e1e" : "#f5f5f3",
+    border: darkMode ? "#333333" : "#e0e0e0",
+    text: darkMode ? "#e8e8e6" : "#1a1a18",
+    textSecondary: darkMode ? "#aaaaaa" : "#666666",
+    textTertiary: darkMode ? "#666666" : "#999999",
+    input: darkMode ? "#2a2a2a" : "#fafaf9",
+    inputBorder: darkMode ? "#444444" : "#d0d0d0",
+    codeBg: darkMode ? "#0d0d0d" : "#1e1e1e",
+    tabBg: darkMode ? "#2a2a2a" : "#f1f0ee",
+    tabActive: darkMode ? "#3a3a3a" : "#ffffff",
+  };
+
+  const statusConfig = {
+    idle: { label: "Ready", bg: "#F1EFE8", color: "#5F5E5A" },
+    running: { label: "Running...", bg: "#FAEEDA", color: "#854F0B" },
+    complete: { label: "Complete", bg: "#E1F5EE", color: "#085041" },
+    error: { label: "Error", bg: "#FAECE7", color: "#993C1D" },
+  };
 
   const agentDone = (name: AgentName) => timeline.some((e) => e.agent === name);
 
@@ -127,60 +172,124 @@ export default function App() {
     setSelected(data);
   };
 
+  const sc = statusConfig[status];
+
   return (
-    <div style={s.app}>
-      {/* Header */}
-      <div style={s.header}>
-        <span style={s.headerTitle}>⚡ Multi-Agent Coder</span>
-        <div style={s.tabs}>
+    <div style={{ ...s.app, background: t.bg, color: t.text }}>
+      {/* ── Header ── */}
+      <div
+        style={{
+          ...s.header,
+          background: t.surface,
+          borderBottom: `0.5px solid ${t.border}`,
+        }}
+      >
+        <div style={s.logoWrap}>
+          <span style={s.logoIcon}>🤖</span>
+          <div>
+            <div style={{ ...s.appName, color: t.text }}>AgentForge</div>
+            <div
+              style={{
+                fontSize: 10,
+                color: t.textTertiary,
+                letterSpacing: "0.04em",
+              }}
+            >
+              Multi-Agent Coding Assistant
+            </div>
+          </div>
+        </div>
+
+        <div style={{ ...s.pillGroup, background: t.tabBg }}>
           <button
-            style={{ ...s.tab, ...(tab === "run" ? s.tabActive : {}) }}
+            style={{
+              ...s.pillBtn,
+              color: tab === "run" ? t.text : t.textSecondary,
+              ...(tab === "run"
+                ? {
+                    background: t.tabActive,
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.12)",
+                  }
+                : {}),
+            }}
             onClick={() => setTab("run")}
           >
-            Run
+            ▶ Run
           </button>
+
           <button
-            style={{ ...s.tab, ...(tab === "dashboard" ? s.tabActive : {}) }}
+            style={{
+              ...s.pillBtn,
+              color: tab === "dashboard" ? t.text : t.textSecondary,
+              ...(tab === "dashboard"
+                ? {
+                    background: t.tabActive,
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.12)",
+                  }
+                : {}),
+            }}
             onClick={loadDashboard}
           >
-            Dashboard
+            ◫ Dashboard
           </button>
-        </div>
-        {tab === "run" && (
-          <span
+
+          <div
+            style={{ width: "0.5px", background: t.border, margin: "4px 2px" }}
+          />
+
+          <div
             style={{
-              ...s.badge,
-              background:
-                status === "running"
-                  ? "#FAEEDA"
-                  : status === "complete"
-                    ? "#E1F5EE"
-                    : "#F1EFE8",
-              color:
-                status === "running"
-                  ? "#854F0B"
-                  : status === "complete"
-                    ? "#085041"
-                    : "#5F5E5A",
+              ...s.pillBtn,
+              background: sc.bg,
+              color: sc.color,
+              cursor: "default",
+              fontWeight: 500,
             }}
           >
-            {status === "idle"
-              ? "Ready"
-              : status === "running"
-                ? "Running..."
-                : status === "complete"
-                  ? "Complete"
-                  : "Error"}
-          </span>
-        )}
+            {status === "running" && <span style={{ marginRight: 4 }}>⏳</span>}
+            {status === "complete" && <span style={{ marginRight: 4 }}>✓</span>}
+            {status === "error" && <span style={{ marginRight: 4 }}>✗</span>}
+            {sc.label}
+          </div>
+
+          <div
+            style={{ width: "0.5px", background: t.border, margin: "4px 2px" }}
+          />
+
+          <button
+            style={{
+              ...s.pillBtn,
+              color: t.textSecondary,
+              ...(darkMode
+                ? {
+                    background: t.tabActive,
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.12)",
+                  }
+                : {}),
+            }}
+            onClick={() => {
+              const next = !darkMode;
+              setDarkMode(next);
+              localStorage.setItem("darkMode", String(next));
+            }}
+          >
+            {darkMode ? "☀️ Light" : "🌙 Dark"}
+          </button>
+        </div>
       </div>
 
       {/* ── RUN TAB ── */}
       {tab === "run" && (
         <div style={s.body}>
           {/* Sidebar */}
-          <div style={s.sidebar}>
-            <div style={s.label}>Agents</div>
+          <div
+            style={{
+              ...s.sidebar,
+              background: t.sidebar,
+              borderRight: `0.5px solid ${t.border}`,
+            }}
+          >
+            <div style={{ ...s.label, color: t.textTertiary }}>Agents</div>
             {AGENTS.map((a) => {
               const isActive = activeAgent === a.name;
               const isDone = agentDone(a.name);
@@ -189,11 +298,12 @@ export default function App() {
                   key={a.name}
                   style={{
                     ...s.agentCard,
+                    background: t.surface,
                     borderColor: isActive
                       ? a.color
                       : isDone
                         ? a.color + "66"
-                        : "#e0e0e0",
+                        : t.border,
                   }}
                 >
                   <div style={s.agentRow}>
@@ -207,23 +317,23 @@ export default function App() {
                             : "#B4B2A9",
                       }}
                     />
-                    <span style={s.agentName}>{a.label}</span>
+                    <span style={{ ...s.agentName, color: t.text }}>
+                      {a.label}
+                    </span>
                     {isDone && (
                       <span style={{ fontSize: 11, color: "#0F6E56" }}>✓</span>
                     )}
                     {isActive && (
-                      <span
-                        style={{
-                          fontSize: 11,
-                          color: a.color,
-                          animation: "pulse 1s infinite",
-                        }}
-                      >
-                        ●
-                      </span>
+                      <span style={{ fontSize: 11, color: a.color }}>●</span>
                     )}
                   </div>
-                  <div style={{ fontSize: 11, color: "#888", marginTop: 4 }}>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: t.textTertiary,
+                      marginTop: 4,
+                    }}
+                  >
                     {isActive ? "Running..." : isDone ? "Done" : "Waiting"}
                   </div>
                 </div>
@@ -233,20 +343,20 @@ export default function App() {
               <div
                 style={{
                   marginTop: "auto",
-                  borderTop: "0.5px solid #e0e0e0",
+                  borderTop: `0.5px solid ${t.border}`,
                   paddingTop: 12,
                 }}
               >
-                <div style={s.label}>Stats</div>
-                <div style={s.stat}>
+                <div style={{ ...s.label, color: t.textTertiary }}>Stats</div>
+                <div style={{ ...s.stat, color: t.textSecondary }}>
                   <span>Score</span>
                   <span style={{ fontWeight: 500 }}>{result.score}/10</span>
                 </div>
-                <div style={s.stat}>
+                <div style={{ ...s.stat, color: t.textSecondary }}>
                   <span>Iterations</span>
                   <span>{result.iterations}</span>
                 </div>
-                <div style={s.stat}>
+                <div style={{ ...s.stat, color: t.textSecondary }}>
                   <span>Execution</span>
                   <span
                     style={{
@@ -256,9 +366,9 @@ export default function App() {
                     {result.execution_success ? "✓ passed" : "✗ failed"}
                   </span>
                 </div>
-                <div style={s.stat}>
+                <div style={{ ...s.stat, color: t.textSecondary }}>
                   <span>Session</span>
-                  <span style={{ fontSize: 10, color: "#999" }}>
+                  <span style={{ fontSize: 10, color: t.textTertiary }}>
                     {result.session_id.slice(0, 8)}
                   </span>
                 </div>
@@ -267,12 +377,22 @@ export default function App() {
           </div>
 
           {/* Main feed */}
-          <div style={s.main}>
-            <div style={s.inputArea}>
+          <div style={{ ...s.main, background: t.surface }}>
+            <div
+              style={{
+                ...s.inputArea,
+                borderBottom: `0.5px solid ${t.border}`,
+              }}
+            >
               <textarea
                 ref={textareaRef}
-                style={s.textarea}
-                placeholder="Enter a coding task... (⌘↵ to run)"
+                style={{
+                  ...s.textarea,
+                  background: t.input,
+                  color: t.text,
+                  border: `0.5px solid ${t.inputBorder}`,
+                }}
+                placeholder="Describe a coding task... e.g. Write a binary search function in Python"
                 value={task}
                 onChange={(e) => setTask(e.target.value)}
                 onKeyDown={(e) => {
@@ -295,7 +415,7 @@ export default function App() {
             {error && <div style={s.errorBox}>{error}</div>}
             <div style={s.feed}>
               {timeline.length === 0 && status === "idle" && (
-                <div style={s.empty}>
+                <div style={{ ...s.empty, color: t.textTertiary }}>
                   Enter a coding task above and press Run.
                   <br />
                   Agents will plan, write, review and execute your code.
@@ -306,7 +426,11 @@ export default function App() {
                 return (
                   <div
                     key={i}
-                    style={{ ...s.feedCard, borderLeftColor: agent.color }}
+                    style={{
+                      ...s.feedCard,
+                      borderColor: t.border,
+                      borderLeftColor: agent.color,
+                    }}
                   >
                     <div
                       style={{
@@ -317,34 +441,133 @@ export default function App() {
                     >
                       {agent.label}
                     </div>
-                    <div style={s.feedText}>{event.summary}</div>
+                    <div
+                      style={{
+                        ...s.feedText,
+                        color: t.textSecondary,
+                        background: t.surface,
+                      }}
+                    >
+                      {event.summary}
+                    </div>
                   </div>
                 );
               })}
               {status === "running" && activeAgent && (
-                <div style={s.thinking}>
-                  <span style={{ color: "#888", fontSize: 13 }}>
+                <div
+                  style={{ ...s.thinking, border: `0.5px dashed ${t.border}` }}
+                >
+                  <span style={{ color: t.textTertiary, fontSize: 13 }}>
                     {AGENTS.find((a) => a.name === activeAgent)?.label} is
                     thinking
                   </span>
-                  <span style={{ color: "#bbb", marginLeft: 8 }}>●●●</span>
+                  <span style={{ color: t.textTertiary, marginLeft: 8 }}>
+                    ●●●
+                  </span>
+                </div>
+              )}
+              {status === "complete" && result && (
+                <div
+                  style={{
+                    borderRadius: 10,
+                    overflow: "hidden",
+                    border: `0.5px solid ${t.border}`,
+                    marginTop: 4,
+                  }}
+                >
+                  <div
+                    style={{
+                      padding: "6px 12px",
+                      background: "#1e1e1e",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 500,
+                        color: "#888",
+                        letterSpacing: "0.06em",
+                        textTransform: "uppercase" as const,
+                      }}
+                    >
+                      Final code
+                    </span>
+                    <div
+                      style={{ display: "flex", gap: 8, alignItems: "center" }}
+                    >
+                      <span
+                        style={{
+                          fontSize: 11,
+                          padding: "2px 8px",
+                          borderRadius: 20,
+                          background: "#E1F5EE",
+                          color: "#085041",
+                        }}
+                      >
+                        ✓ {result.score}/10
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 11,
+                          padding: "2px 8px",
+                          borderRadius: 20,
+                          background: result.execution_success
+                            ? "#E1F5EE"
+                            : "#FAECE7",
+                          color: result.execution_success
+                            ? "#085041"
+                            : "#993C1D",
+                        }}
+                      >
+                        {result.execution_success ? "Executed" : "Failed"}
+                      </span>
+                    </div>
+                  </div>
+                  <pre
+                    style={{
+                      ...s.codeBox,
+                      background: t.codeBg,
+                      borderRadius: 0,
+                      margin: 0,
+                      maxHeight: 400,
+                      overflowY: "auto" as const,
+                    }}
+                  >
+                    {result.final_code}
+                  </pre>
                 </div>
               )}
             </div>
           </div>
 
           {/* Right panel */}
-          <div style={s.right}>
+          <div
+            style={{
+              ...s.right,
+              background: t.sidebar,
+              borderLeft: `0.5px solid ${t.border}`,
+            }}
+          >
             {!result ? (
-              <div style={s.empty}>
+              <div style={{ ...s.empty, color: t.textTertiary }}>
                 Output appears here after run completes.
               </div>
             ) : (
               <>
-                <div style={s.label}>Plan</div>
-                <div style={s.planBox}>{result.plan}</div>
-                <div style={s.label}>Final code</div>
-                <pre style={s.codeBox}>{result.final_code}</pre>
+                <div style={{ ...s.label, color: t.textTertiary }}>Plan</div>
+                <div
+                  style={{
+                    ...s.planBox,
+                    color: t.textSecondary,
+                    background: t.surface,
+                    border: `0.5px solid ${t.border}`,
+                  }}
+                >
+                  {cleanPlan(result.plan)}
+                </div>
               </>
             )}
           </div>
@@ -354,22 +577,61 @@ export default function App() {
       {/* ── DASHBOARD TAB ── */}
       {tab === "dashboard" && (
         <div style={s.dashBody}>
-          {/* Session list */}
-          <div style={s.sessionList}>
-            <div style={{ ...s.label, marginBottom: 8 }}>Past sessions</div>
-            {loadingDash && <div style={s.empty}>Loading...</div>}
+          <div
+            style={{
+              ...s.sessionList,
+              background: t.sidebar,
+              borderRight: `0.5px solid ${t.border}`,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: 8,
+              }}
+            >
+              <div
+                style={{ ...s.label, color: t.textTertiary, marginBottom: 0 }}
+              >
+                Past sessions
+              </div>
+              <button
+                onClick={loadDashboard}
+                style={{
+                  fontSize: 11,
+                  padding: "3px 10px",
+                  borderRadius: 6,
+                  border: `0.5px solid ${t.border}`,
+                  background: t.surface,
+                  color: t.textSecondary,
+                  cursor: "pointer",
+                }}
+              >
+                ↻ Refresh
+              </button>
+            </div>
+            {loadingDash && (
+              <div style={{ ...s.empty, color: t.textTertiary }}>
+                Loading...
+              </div>
+            )}
             {!loadingDash && sessions.length === 0 && (
-              <div style={s.empty}>No sessions yet. Run a task first.</div>
+              <div style={{ ...s.empty, color: t.textTertiary }}>
+                No sessions yet. Run a task first.
+              </div>
             )}
             {sessions.map((sess) => (
               <div
                 key={sess.session_id}
                 style={{
                   ...s.sessionCard,
+                  background: t.surface,
                   borderColor:
                     selected?.session_id === sess.session_id
                       ? "#185FA5"
-                      : "#e0e0e0",
+                      : t.border,
                 }}
                 onClick={() => loadSession(sess.session_id)}
               >
@@ -377,7 +639,7 @@ export default function App() {
                   style={{
                     fontSize: 13,
                     fontWeight: 500,
-                    color: "#1a1a18",
+                    color: t.text,
                     marginBottom: 4,
                   }}
                 >
@@ -386,7 +648,7 @@ export default function App() {
                     : sess.task}
                 </div>
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <span style={{ fontSize: 11, color: "#888" }}>
+                  <span style={{ fontSize: 11, color: t.textTertiary }}>
                     {sess.session_id.slice(0, 8)}
                   </span>
                   {sess.score !== null && (
@@ -403,7 +665,11 @@ export default function App() {
                     </span>
                   )}
                   <span
-                    style={{ fontSize: 11, color: "#888", marginLeft: "auto" }}
+                    style={{
+                      fontSize: 11,
+                      color: t.textTertiary,
+                      marginLeft: "auto",
+                    }}
                   >
                     {sess.updated_at
                       ? new Date(sess.updated_at * 1000).toLocaleTimeString()
@@ -414,15 +680,21 @@ export default function App() {
             ))}
           </div>
 
-          {/* Session detail / replay */}
-          <div style={s.sessionDetail}>
+          <div style={{ ...s.sessionDetail, background: t.surface }}>
             {!selected ? (
-              <div style={s.empty}>
+              <div style={{ ...s.empty, color: t.textTertiary }}>
                 Click a session on the left to replay it.
               </div>
             ) : (
               <>
-                <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 4 }}>
+                <div
+                  style={{
+                    fontSize: 15,
+                    fontWeight: 500,
+                    color: t.text,
+                    marginBottom: 4,
+                  }}
+                >
                   {selected.task}
                 </div>
                 <div
@@ -464,7 +736,22 @@ export default function App() {
                   </span>
                 </div>
 
-                <div style={s.label}>Agent timeline</div>
+                <div style={{ ...s.label, color: t.textTertiary }}>Plan</div>
+                <div
+                  style={{
+                    ...s.planBox,
+                    color: t.textSecondary,
+                    background: t.sidebar,
+                    border: `0.5px solid ${t.border}`,
+                    marginBottom: 16,
+                  }}
+                >
+                  {cleanPlan(selected.plan)}
+                </div>
+
+                <div style={{ ...s.label, color: t.textTertiary }}>
+                  Agent timeline
+                </div>
                 <div
                   style={{
                     display: "flex",
@@ -480,6 +767,7 @@ export default function App() {
                         key={i}
                         style={{
                           ...s.feedCard,
+                          borderColor: t.border,
                           borderLeftColor: agent?.color || "#ccc",
                         }}
                       >
@@ -492,14 +780,26 @@ export default function App() {
                         >
                           {agent?.label}
                         </div>
-                        <div style={s.feedText}>{event.summary}</div>
+                        <div
+                          style={{
+                            ...s.feedText,
+                            color: t.textSecondary,
+                            background: t.surface,
+                          }}
+                        >
+                          {event.summary}
+                        </div>
                       </div>
                     );
                   })}
                 </div>
 
-                <div style={s.label}>Final code</div>
-                <pre style={s.codeBox}>{selected.final_code}</pre>
+                <div style={{ ...s.label, color: t.textTertiary }}>
+                  Final code
+                </div>
+                <pre style={{ ...s.codeBox, background: t.codeBg }}>
+                  {selected.final_code}
+                </pre>
               </>
             )}
           </div>
@@ -515,39 +815,35 @@ const s: Record<string, React.CSSProperties> = {
     height: "100vh",
     display: "flex",
     flexDirection: "column",
-    background: "#fafaf9",
-    color: "#1a1a18",
   },
   header: {
     display: "flex",
     alignItems: "center",
     padding: "10px 20px",
-    borderBottom: "0.5px solid #e0e0e0",
-    background: "#fff",
-    gap: 12,
+    gap: 16,
   },
-  headerTitle: { fontSize: 15, fontWeight: 600 },
-  tabs: {
+  logoWrap: { display: "flex", alignItems: "center", gap: 10, marginRight: 8 },
+  logoIcon: { fontSize: 22 },
+  appName: { fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em" },
+  pillGroup: {
     display: "flex",
-    gap: 4,
-    background: "#f1f0ee",
-    borderRadius: 8,
+    alignItems: "center",
+    gap: 2,
+    borderRadius: 10,
     padding: 3,
   },
-  tab: {
+  pillBtn: {
     fontSize: 12,
     fontWeight: 500,
-    padding: "5px 14px",
-    borderRadius: 6,
+    padding: "5px 13px",
+    borderRadius: 7,
     border: "none",
     background: "transparent",
-    color: "#666",
     cursor: "pointer",
-  },
-  tabActive: {
-    background: "#fff",
-    color: "#1a1a18",
-    boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+    whiteSpace: "nowrap" as const,
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
   },
   badge: {
     fontSize: 11,
@@ -562,28 +858,20 @@ const s: Record<string, React.CSSProperties> = {
     overflow: "hidden",
   },
   sidebar: {
-    borderRight: "0.5px solid #e0e0e0",
     padding: 14,
     display: "flex",
     flexDirection: "column",
     gap: 8,
-    background: "#f5f5f3",
-    overflowY: "auto",
+    overflowY: "auto" as const,
   },
   label: {
     fontSize: 10,
     fontWeight: 500,
-    color: "#999",
     letterSpacing: "0.06em",
-    textTransform: "uppercase",
+    textTransform: "uppercase" as const,
     marginBottom: 4,
   },
-  agentCard: {
-    border: "0.5px solid #e0e0e0",
-    borderRadius: 8,
-    padding: "8px 10px",
-    background: "#fff",
-  },
+  agentCard: { border: "0.5px solid", borderRadius: 8, padding: "8px 10px" },
   agentRow: { display: "flex", alignItems: "center", gap: 7 },
   dot: { width: 8, height: 8, borderRadius: "50%", flexShrink: 0 },
   agentName: { fontSize: 13, fontWeight: 500, flex: 1 },
@@ -591,18 +879,11 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     justifyContent: "space-between",
     fontSize: 12,
-    color: "#666",
     padding: "3px 0",
   },
-  main: {
-    display: "flex",
-    flexDirection: "column",
-    overflow: "hidden",
-    background: "#fff",
-  },
+  main: { display: "flex", flexDirection: "column", overflow: "hidden" },
   inputArea: {
     padding: 14,
-    borderBottom: "0.5px solid #e0e0e0",
     display: "flex",
     gap: 10,
     alignItems: "flex-start",
@@ -611,11 +892,9 @@ const s: Record<string, React.CSSProperties> = {
     flex: 1,
     fontSize: 13,
     padding: "8px 12px",
-    border: "0.5px solid #d0d0d0",
     borderRadius: 8,
-    resize: "none",
+    resize: "none" as const,
     fontFamily: "inherit",
-    background: "#fafaf9",
   },
   runBtn: {
     fontSize: 13,
@@ -626,41 +905,45 @@ const s: Record<string, React.CSSProperties> = {
     borderRadius: 8,
     fontWeight: 500,
     cursor: "pointer",
-    whiteSpace: "nowrap",
+    whiteSpace: "nowrap" as const,
   },
   feed: {
     flex: 1,
-    overflowY: "auto",
-    padding: 14,
+    overflowY: "auto" as const,
+    padding: "14px 16px",
     display: "flex",
-    flexDirection: "column",
-    gap: 8,
+    flexDirection: "column" as const,
+    gap: 10,
   },
   feedCard: {
-    border: "0.5px solid #e0e0e0",
-    borderLeft: "3px solid #ccc",
+    border: "0.5px solid",
+    borderLeft: "3px solid",
     borderRadius: 8,
-    overflow: "hidden",
+    overflow: "visible",
   },
   feedLabel: {
     fontSize: 10,
     fontWeight: 500,
     letterSpacing: "0.05em",
-    textTransform: "uppercase",
+    textTransform: "uppercase" as const,
     padding: "4px 10px",
   },
-  feedText: { fontSize: 13, padding: "8px 10px", color: "#444" },
+  feedText: {
+    fontSize: 13,
+    padding: "8px 10px",
+    whiteSpace: "pre-wrap" as const,
+    wordBreak: "break-word" as const,
+    lineHeight: 1.6,
+  },
   thinking: {
     padding: "10px 12px",
-    border: "0.5px dashed #d0d0d0",
     borderRadius: 8,
     display: "flex",
     alignItems: "center",
   },
   empty: {
     fontSize: 13,
-    color: "#999",
-    textAlign: "center",
+    textAlign: "center" as const,
     padding: "40px 20px",
     lineHeight: 1.6,
   },
@@ -673,32 +956,27 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 13,
   },
   right: {
-    borderLeft: "0.5px solid #e0e0e0",
     padding: 14,
-    overflowY: "auto",
-    background: "#fafaf9",
+    overflowY: "auto" as const,
     display: "flex",
-    flexDirection: "column",
+    flexDirection: "column" as const,
     gap: 8,
   },
   planBox: {
     fontSize: 12,
-    color: "#555",
-    background: "#f5f5f3",
     borderRadius: 8,
     padding: "10px 12px",
-    lineHeight: 1.6,
-    whiteSpace: "pre-wrap",
+    lineHeight: 1.9,
+    whiteSpace: "pre-wrap" as const,
     marginBottom: 8,
   },
   codeBox: {
     fontSize: 11,
-    background: "#1e1e1e",
     color: "#d4d4d4",
     borderRadius: 8,
     padding: "12px 14px",
-    overflowX: "auto",
-    whiteSpace: "pre-wrap",
+    overflowX: "auto" as const,
+    whiteSpace: "pre-wrap" as const,
     lineHeight: 1.6,
     margin: 0,
   },
@@ -708,19 +986,13 @@ const s: Record<string, React.CSSProperties> = {
     flex: 1,
     overflow: "hidden",
   },
-  sessionList: {
-    borderRight: "0.5px solid #e0e0e0",
-    padding: 14,
-    overflowY: "auto",
-    background: "#f5f5f3",
-  },
+  sessionList: { padding: 14, overflowY: "auto" as const },
   sessionCard: {
-    border: "0.5px solid #e0e0e0",
+    border: "0.5px solid",
     borderRadius: 8,
     padding: "10px 12px",
-    background: "#fff",
     marginBottom: 8,
     cursor: "pointer",
   },
-  sessionDetail: { padding: 16, overflowY: "auto", background: "#fff" },
+  sessionDetail: { padding: 16, overflowY: "auto" as const },
 };
